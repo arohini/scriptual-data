@@ -1,0 +1,14 @@
+docling
+pandas
+fastapi
+opentelemetry
+fitz
+pytesseract
+pdf2image
+sanskrit-parser
+chromadb
+devatrans
+deep-translator
+pymongo
+pymongo[srv]
+
