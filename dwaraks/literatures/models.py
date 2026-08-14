@@ -5,7 +5,7 @@ Description: This module defines the data models for the spiritual data applicat
 including request and response schemas
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import datetime
 from enum import Enum
 
@@ -28,4 +28,26 @@ class DivineList(str, Enum):
     goddess_lalitha = "goddess-lalitha"
     goddess_meenakshi = "goddess-meenakshi"
     goddess_durga = "goddess-durga"
+
+class SubStory(BaseModel):
+    sub_story_title: str
+    sub_story_tag: str
+    sub_story: str
+class SaiSatcharitraChapter(BaseModel):
+    chapter_number: int
+    api_resource: str
+    title: str
+    tags : str
+    stories: list[SubStory]
     
+    @field_validator("chapter_number")
+    def validate_chapter_number(cls, value):
+        if value <= 0:
+            raise ValueError("Chapter number must be a positive integer.")
+        return value
+    
+    @field_validator("api_resource")
+    def validate_api_resource(cls, value):
+        if value != "chapter":
+            raise ValueError("api_resource must be 'chapter'.")
+        return value
