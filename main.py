@@ -5,14 +5,11 @@ created: 2024-04-27
 
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
-from opentelemetry import trace
-from opentelemetry import metrics
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from interceptor.metrics import *
-from dwaraks.literatures.ssb_sc import chapters, get_chapter_title
+from dwaraks.literatures.ssb_sc import *
 from dwaraks.literatures.models import *
+from dwaraks.storage_connection import MongodbOperations
 import logging, os
 import uvicorn
 
@@ -20,23 +17,18 @@ import uvicorn
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+app = FastAPI(title="Scriptural Data Library API", 
+              description="API for accessing scriptural data and resources.", 
+              version="1.0.0")
 
-# 3. Instrument FastAPI
-# This automatically tracks HTTP request counts, duration, and errors
-FastAPIInstrumentor.instrument_app(app)
+mongodb_ops = MongodbOperations(db_name="ssb_library")
 
+@app.get("/http-version")
+async def read_root(request: Request):
+    # Returns "1.1", "2", or "3"
+    http_version = request.scope.get("http_version") 
+    return {"http_version": http_version}
 
-# Acquire a tracer
-tracer = trace.get_tracer("spiritualdata.tracer")
-# Acquire a meter.
-meter = metrics.get_meter("spiritualdata.meter")
-
-# Now create a counter instrument to make measurements with
-hymn_counter = meter.create_counter(
-    "spiritualdata.hymns",
-    description="The number of spiritual hymns requested by users",
-)
 
 @app.get("/about/{author_name}")
 def about_author(author_name: str) -> dict:
@@ -61,21 +53,54 @@ def home():
             dieties."
     }
 
+@app.get("/srisai-satcharitra/about-srisai-satcharitra")
+def about_srisai_satcharitra():
+    try:
+        return {"about": ssc_about()}
+    except Exception as e:
+        logger.error(f"Route: Error retrieving about information for Srisai Satcharitra: {str(e)}")
+        raise HTTPException(status_code=500, detail="An error occurred while retrieving the about information.")
 
-@app.get("/ssb-sc/index")
-def get_ssb_index():
-    return chapters
+@app.get("/srisai-satcharitra/about-shirdi-sai-baba")
+def about_shirdi_sai_baba():
+    try:
+        return {"about": shirdi_sai_baba_about()}
+    except Exception as e:
+        logger.error(f"Route: Error retrieving about information for Shirdi Sai Baba: {str(e)}")
+        raise HTTPException(status_code=500, detail="An error occurred while retrieving the about information.")
 
+@app.get("/srisai-satcharitra/about-author")
+def about_srisai_satcharitra_author():
+    try:
+        return {"author": ssc_about_author()}
+    except Exception as e:
+        logger.error(f"Route: Error retrieving author information for Srisai Satcharitra: {str(e)}")
+        raise HTTPException(status_code=500, detail="An error occurred while retrieving the author information.")
 
-@app.get("/ssb-sc/chapter-name/{chapter_id}")
-def get_chapter_name(chapter_id: int) -> dict:
-    # Here you would typically fetch the chapter name for the given chapter_id
-    # To do: from a database
-    with tracer.start_as_current_span("ssb-sc-request") as hymn_span:
-        logging.info(f"Received request for chapter ID: {chapter_id}")
-        result = get_chapter_title(chapter_id)
-        return result
+@app.post("/srisai-satcharitra/insert-chapter")
+def insert_srisai_satcharitra_chapter(chapter: SaiSatcharitraChapter):
+    try:
+        insert_status = insert_chapters(chapter)
+        if insert_status == "success":
+            return {"message": "Chapter inserted successfully."}
+        elif insert_status == "error":
+            raise HTTPException(status_code=500, detail="An error occurred while inserting the chapter.")
+    except Exception as e:
+        logger.error(f"Route: Error inserting chapter for Srisai Satcharitra: {str(e)}")
+        raise HTTPException(status_code=500, detail="An error occurred while inserting the chapter.")
+        raise HTTPException(status_code=500, detail="An error occurred while retrieving the author information.")
 
+@app.delete("/srisai-satcharitra/remove-chapter/{chapter_number}")
+def remove_srisai_satcharitra_chapter(chapter_number: int):
+    try:
+        remove_status = remove_chapter(chapter_number)
+        if remove_status == "success":
+            return {"message": "Chapter removed successfully."}
+        elif remove_status == "error":
+            raise HTTPException(status_code=500, detail="An error occurred while removing the chapter.")
+    except Exception as e:
+        logger.error(f"Route: Error removing chapter for Srisai Satcharitra: {str(e)}")
+        raise HTTPException(status_code=500, detail="An error occurred while removing the chapter.")
 
 @app.get("/data-list/{supreme-list}")
 def get_divine_list(supreme_list: DivineList) -> dict:
