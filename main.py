@@ -5,23 +5,51 @@ created: 2024-04-27
 
 """
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import FileResponse
 from dwaraks.literatures.ssb_sc import *
 from dwaraks.literatures.models import *
 from dwaraks.storage_connection import MongodbOperations
 import logging, os
 import uvicorn
+import secrets
+import configparser
 
+
+config = configparser.ConfigParser()
+config.read("config/config.ini")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+security = HTTPBasic()
+
+USERNAME = config.get("BASIC_AUTH", "username")
+PASSWORD = config.get("BASIC_AUTH", "password")
+
+def verify_credentials(
+    credentials: HTTPBasicCredentials = Depends(security),
+):
+    username_ok = secrets.compare_digest(credentials.username, USERNAME)
+    password_ok = secrets.compare_digest(credentials.password, PASSWORD)
+
+    if not (username_ok and password_ok):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+    return credentials.username
+
 app = FastAPI(title="Scriptural Data Library API", 
               description="API for accessing scriptural data and resources.", 
-              version="1.0.0")
+              version="1.0.0",
+              dependencies=[Depends(verify_credentials)])
 
 mongodb_ops = MongodbOperations(db_name="ssb_library")
+
 
 @app.get("/http-version")
 async def read_root(request: Request):
